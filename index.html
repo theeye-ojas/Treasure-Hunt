@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>THE VAULT — 15 Level Treasure Hunt</title>
+
+<!--
+  ============================================================================
+  ORGANIZER NOTES — read this before your event
+  ============================================================================
+  1. Edit the CONFIG array below (search for "EDIT ME"). For each of the
+     15 levels, set:
+       - title      : short name for the level (shown once unlocked)
+       - link       : the URL to the puzzle (Google Slides / Docs / etc.)
+       - answerHash : a SHA-256 hash of the correct answer, NOT the plain
+                      answer. This stops a team from opening dev tools /
+                      "view source" and reading the answers directly.
+
+  2. To generate a hash for a real answer:
+       - Open this file in a browser and add ?admin=1 to the URL
+         e.g. vault-hunt.html?admin=1
+       - A small "Admin: Hash Generator" panel appears at the bottom.
+       - Type the answer, click "Generate Hash", copy the result into
+         answerHash for that level.
+       - Answers are matched case-insensitively and with whitespace
+         trimmed, so "Eureka", "eureka", " eureka " all match the same hash.
+
+  3. Progress is saved in the browser's localStorage under the team name,
+     so a team can close the tab and come back without losing progress.
+     This is per-device: if a team splits across two phones, each phone
+     tracks its own progress unless they use the same browser/device.
+
+  4. This is a static HTML file — host it anywhere (GitHub Pages, Netlify,
+     Vercel, or even a shared Google Drive link via a static host). No
+     backend or database required.
+
+  5. Security note: this is client-side hashing, which is good enough to
+     stop casual peeking but not a cryptographic guarantee against a
+     determined team inspecting network/JS. For a friendly or classroom
+     competition this is more than sufficient.
+  ============================================================================
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg: #12151b;
+    --bg-deep: #0b0d11;
+    --panel: #1b1f28;
+    --panel-raised: #232834;
+    --brass: #c9a227;
+    --brass-dim: #6f5c1c;
+    --brass-glow: rgba(201,162,39,0.35);
+    --emerald: #34a870;
+    --emerald-glow: rgba(52,168,112,0.35);
+    --red: #d9534f;
+    --text: #e9e6dd;
+    --muted: #8b93a1;
+    --hairline: #2b3140;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html,body{
+    margin:0;
+    padding:0;
+    background:
+      radial-gradient(1200px 600px at 50% -10%, rgba(201,162,39,0.06), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+
+  ::selection{ background: var(--brass); color:#12151b; }
+
+  .wrap{
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  /* ---------- Header ---------- */
+  .eyebrow{
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    font-size: 12px;
+    color: var(--brass);
+    text-align:center;
+    margin-bottom: 10px;
+  }
+
+  h1.title{
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: clamp(34px, 6vw, 56px);
+    text-align:center;
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+
+  .subtitle{
+    text-align:center;
+    color: var(--muted);
+    font-size: 15px;
+    margin-bottom: 36px;
+  }
+
+  /* ---------- Team panel ---------- */
+  .team-panel{
+    background: linear-gradient(180deg, var(--panel-raised), var(--panel));
+    border: 1px solid var(--hairline);
+    border-radius: 14px;
+    padding: 22px 24px;
+    display:flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    align-items:center;
+    justify-content: space-between;
+    margin-bottom: 36px;
+  }
+
+  .team-panel .field label{
+    display:block;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .team-panel input[type="text"]{
+    background: var(--bg-deep);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    width: 220px;
+  }
+  .team-panel input[type="text"]:focus{
+    outline: 2px solid var(--brass);
+    outline-offset: 1px;
+  }
+
+  .btn{
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    border: none;
+    border-radius: 9px;
+    padding: 11px 18px;
+    cursor: pointer;
+    transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+  }
+  .btn:focus-visible{ outline: 2px solid var(--brass); outline-offset: 2px; }
+  .btn-brass{ background: var(--brass); color: #1a1607; }
+  .btn-brass:hover{ box-shadow: 0 0 0 3px var(--brass-glow); transform: translateY(-1px); }
+  .btn-ghost{ background: transparent; color: var(--muted); border: 1px solid var(--hairline); }
+  .btn-ghost:hover{ color: var(--text); border-color: var(--muted); }
+  .btn-emerald{ background: var(--emerald); color: #06180f; }
+  .btn-emerald:hover{ box-shadow: 0 0 0 3px var(--emerald-glow); transform: translateY(-1px); }
+  .btn:disabled{ opacity: .4; cursor: not-allowed; transform:none; box-shadow:none; }
+
+  .stat{
+    text-align: right;
+  }
+  .stat .num{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 22px;
+    color: var(--emerald);
+  }
+  .stat .label{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* ---------- Progress ---------- */
+  .progress-track{
+    height: 6px;
+    background: var(--hairline);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 40px;
+  }
+  .progress-fill{
+    height: 100%;
+    background: linear-gradient(90deg, var(--brass-dim), var(--emerald));
+    width: 0%;
+    transition: width .5s ease;
+  }
+
+  /* ---------- Vault grid ---------- */
+  .grid{
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 18px;
+  }
+  @media (max-width: 760px){
+    .grid{ grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 480px){
+    .grid{ grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  }
+
+  .dial{
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #2a2f3a, #171a21 70%);
+    border: 2px solid var(--hairline);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor: pointer;
+    transition: transform .15s ease, border-color .2s ease, box-shadow .2s ease;
+    user-select:none;
+  }
+  .dial::before{
+    content:'';
+    position:absolute;
+    inset: 8px;
+    border-radius: 50%;
+    border: 1px dashed var(--hairline);
+  }
+  .dial .num{
+    font-family:'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: clamp(20px, 4vw, 28px);
+    color: var(--muted);
+    z-index:2;
+  }
+  .dial .lock-icon, .dial .check-icon{
+    position:absolute;
+    bottom: 14%;
+    font-size: 13px;
+    z-index:2;
+  }
+
+  .dial.locked{ cursor: not-allowed; opacity: .55; }
+  .dial.locked .num{ color: #565d6b; }
+
+  .dial.active{
+    border-color: var(--brass);
+    box-shadow: 0 0 0 0 var(--brass-glow);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  .dial.active .num{ color: var(--brass); }
+  .dial.active:hover{ transform: translateY(-3px) rotate(4deg); }
+
+  .dial.solved{
+    border-color: var(--emerald);
+    background: radial-gradient(circle at 35% 30%, #1b3327, #10201a 70%);
+  }
+  .dial.solved .num{ color: var(--emerald); }
+
+  @keyframes pulse{
+    0%,100%{ box-shadow: 0 0 0 0 var(--brass-glow); }
+    50%{ box-shadow: 0 0 0 8px transparent; }
+  }
+
+  .dial.shake{ animation: shake .4s ease; }
+  @keyframes shake{
+    0%,100%{ transform: translateX(0); }
+    20%{ transform: translateX(-6px); }
+    40%{ transform: translateX(6px); }
+    60%{ transform: translateX(-4px); }
+    80%{ transform: translateX(4px); }
+  }
+
+  /* ---------- Modal ---------- */
+  .overlay{
+    position: fixed; inset:0;
+    background: rgba(6,7,10,0.72);
+    backdrop-filter: blur(3px);
+    display:flex; align-items:center; justify-content:center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .modal{
+    background: linear-gradient(180deg, var(--panel-raised), var(--panel));
+    border: 1px solid var(--hairline);
+    border-radius: 16px;
+    max-width: 460px;
+    width: 100%;
+    padding: 28px;
+    position: relative;
+  }
+  .modal .close{
+    position:absolute; top:14px; right:16px;
+    background:none; border:none; color:var(--muted);
+    font-size: 20px; cursor:pointer; line-height:1;
+  }
+  .modal .close:hover{ color: var(--text); }
+  .modal .eyebrow{ text-align:left; margin-bottom: 4px; }
+  .modal h2{
+    font-family:'Space Grotesk', sans-serif;
+    font-size: 22px;
+    margin: 0 0 18px;
+  }
+  .modal a.puzzle-link{
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    text-decoration:none;
+    background: var(--bg-deep);
+    border: 1px solid var(--brass-dim);
+    color: var(--brass);
+    font-family:'Space Grotesk', sans-serif;
+    font-weight: 600;
+    padding: 13px;
+    border-radius: 9px;
+    margin-bottom: 20px;
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .modal a.puzzle-link:hover{ border-color: var(--brass); background:#20181052; }
+
+  .modal label{
+    display:block;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .modal input[type="text"]{
+    width:100%;
+    background: var(--bg-deep);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-size: 15px;
+    margin-bottom: 14px;
+  }
+  .modal input[type="text"]:focus{ outline: 2px solid var(--brass); outline-offset: 1px; }
+  .modal .actions{ display:flex; gap:10px; }
+  .modal .actions .btn{ flex:1; }
+
+  .feedback{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 13px;
+    min-height: 18px;
+    margin-top: 12px;
+    text-align:center;
+  }
+  .feedback.err{ color: var(--red); }
+  .feedback.ok{ color: var(--emerald); }
+
+  /* ---------- Completion ---------- */
+  .cleared{
+    text-align:center;
+    padding: 40px 20px;
+    background: linear-gradient(180deg, var(--panel-raised), var(--panel));
+    border: 1px solid var(--emerald);
+    border-radius: 16px;
+    margin-top: 30px;
+    display:none;
+  }
+  .cleared h2{
+    font-family:'Space Grotesk', sans-serif;
+    color: var(--emerald);
+    font-size: 30px;
+    margin: 0 0 8px;
+  }
+  .cleared .time{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 16px;
+    color: var(--brass);
+  }
+
+  /* ---------- Admin panel ---------- */
+  .admin{
+    margin-top: 60px;
+    border-top: 1px dashed var(--hairline);
+    padding-top: 24px;
+  }
+  .admin h3{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--brass);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .admin-row{ display:flex; gap:10px; flex-wrap: wrap; margin-top: 10px; }
+  .admin-row input{
+    flex:1;
+    min-width: 200px;
+    background: var(--bg-deep);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+  }
+  .admin-out{
+    margin-top: 10px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    word-break: break-all;
+    background: var(--bg-deep);
+    padding: 10px;
+    border-radius: 8px;
+    min-height: 20px;
+  }
+
+  footer{
+    text-align:center;
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 60px;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="eyebrow">A Fifteen-Chamber Vault</div>
+  <h1 class="title">THE VAULT</h1>
+  <p class="subtitle">Crack each chamber's puzzle to earn the combination for the next one.</p>
+
+  <div class="team-panel">
+    <div class="field">
+      <label for="teamName">Team name</label>
+      <input type="text" id="teamName" placeholder="e.g. The Cipher Squad" />
+    </div>
+    <button class="btn btn-brass" id="startBtn">Enter the vault</button>
+    <div class="stat">
+      <div class="num" id="timerDisplay">00:00:00</div>
+      <div class="label">Time in vault</div>
+    </div>
+    <div class="stat">
+      <div class="num" id="progressCount">0 / 15</div>
+      <div class="label">Chambers cracked</div>
+    </div>
+  </div>
+
+  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="cleared" id="clearedPanel">
+    <h2>VAULT CLEARED</h2>
+    <p>Every chamber cracked. Well played.</p>
+    <div class="time" id="finalTime"></div>
+  </div>
+
+  <footer>Answers are checked locally in your browser — no data leaves this page except to load the puzzle links.</footer>
+
+  <div class="admin" id="adminPanel" style="display:none;">
+    <h3>Admin: Hash Generator</h3>
+    <div class="admin-row">
+      <input type="text" id="adminInput" placeholder="Type an answer to hash…" />
+      <button class="btn btn-ghost" id="adminHashBtn">Generate hash</button>
+    </div>
+    <div class="admin-out" id="adminOut">Paste the result into answerHash for the matching level in CONFIG.</div>
+  </div>
+
+</div>
+
+<!-- ---------------------------------------------------------------------
+     Modal (single instance, reused for every level)
+--------------------------------------------------------------------------->
+<div class="overlay" id="overlay" style="display:none;">
+  <div class="modal">
+    <button class="close" id="closeModal" aria-label="Close">&times;</button>
+    <div class="eyebrow" id="modalEyebrow">Chamber</div>
+    <h2 id="modalTitle">Level</h2>
+    <a href="#" target="_blank" rel="noopener" class="puzzle-link" id="puzzleLink">Open the puzzle ↗</a>
+    <label for="answerInput">Enter the combination</label>
+    <input type="text" id="answerInput" placeholder="Your answer" autocomplete="off" />
+    <div class="actions">
+      <button class="btn btn-ghost" id="cancelBtn">Cancel</button>
+      <button class="btn btn-emerald" id="submitBtn">Unlock</button>
+    </div>
+    <div class="feedback" id="feedback"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================================
+   EDIT ME — 15 levels. Replace `link` with your real puzzle URL and
+   `answerHash` with the SHA-256 hash of the real answer (see admin panel,
+   add ?admin=1 to the page URL to reveal it).
+   Placeholder answers right now are "answer1".."answer15" (case-insensitive,
+   trimmed) purely so you can test the flow end-to-end before the event.
+============================================================================ */
+const CONFIG = [
+  { title: "First Round",    link: "https://youtu.be/QDia3e12czc?si=XpVKqlbrcVTTf-rk",  answerHash: "b595e79becfd3928538dc133eaf606fbb9a9270096c94707a84432df9307004a" },
+  { title: "Ashes of the Archive", link: "https://docs.google.com/presentation/d/REPLACE_ME_2/edit",  answerHash: "1bb016674a836dbfd57ecd4e1582d7d6303ec62d16ff23ca1b06cca989fa4f6d" },
+  { title: "The Cartographer",     link: "https://docs.google.com/presentation/d/REPLACE_ME_3/edit",  answerHash: "831ecc885b36e981d38070c68b0a2c9a6e3fdad4eeb42c1aed70a2b4d3fafde8" },
+  { title: "Nine Locks",           link: "https://docs.google.com/presentation/d/REPLACE_ME_4/edit",  answerHash: "25a8b808a37267af7e8d641cda2b68263d7fedcc4aaf989e10f5ebc17c795f84" },
+  { title: "The Glassmaker",       link: "https://docs.google.com/presentation/d/REPLACE_ME_5/edit",  answerHash: "2818b8aa68104705bb66dddd49480cf8873139f45fa2c157a5602d41261c0dcf" },
+  { title: "Ledger of Whispers",   link: "https://docs.google.com/presentation/d/REPLACE_ME_6/edit",  answerHash: "e6bf535f6e304734a47928d95fed0a93fa4c4c4f3bb1e878f325b082b951429e" },
+  { title: "The Clockmaker's Riddle", link: "https://docs.google.com/presentation/d/REPLACE_ME_7/edit", answerHash: "25dc1ebb1c63a9e3387c7235ad2f4048f090b60ee63c5f18c7690b31c662e7a2" },
+  { title: "Salt and Signal",      link: "https://docs.google.com/presentation/d/REPLACE_ME_8/edit",  answerHash: "b129ac3c551fc550b5338878c5b03131de4c7a971c36a750ddd283fb79541dd1" },
+  { title: "The Forger's Mark",    link: "https://docs.google.com/presentation/d/REPLACE_ME_9/edit",  answerHash: "6880d0e861efa9568ec69b9a80c7c32d09a9fd8634fec4dfc481dbecb59abb9f" },
+  { title: "Ninth Chamber",        link: "https://docs.google.com/presentation/d/REPLACE_ME_10/edit", answerHash: "61ce1b80923ba747b0d930ae883c25c2f2f82980fce8e1d057b483231457c47a" },
+  { title: "The Long Division",    link: "https://docs.google.com/presentation/d/REPLACE_ME_11/edit", answerHash: "8a339fe4bc9392503f21892f0c682fd4ba56c0c33b515b4daf5545cb8c8d83a0" },
+  { title: "Echo Chamber",         link: "https://docs.google.com/presentation/d/REPLACE_ME_12/edit", answerHash: "2b3d85743009665317cb12982326a61c7d24f97b5cfd2ba2722ca7c97f3dfa99" },
+  { title: "The Counterfeit Key",  link: "https://docs.google.com/presentation/d/REPLACE_ME_13/edit", answerHash: "0c016229399c20875905e4a472474cc7496d7f69565375ef24b4d7f979697eb3" },
+  { title: "Last Light",          link: "https://docs.google.com/presentation/d/REPLACE_ME_14/edit", answerHash: "978fb8b7a76d0b5794f9238dbb17bd8fee867c8227a1853d52ca7874930da749" },
+  { title: "The Final Vault",     link: "https://docs.google.com/presentation/d/REPLACE_ME_15/edit", answerHash: "d612b0d4c9500dad3d3d95d90c90f63150452806ea3d1d0db8e2b5ab1610e93c" },
+];
+
+/* ---------------------------------------------------------------------- */
+
+const LEVELS = CONFIG.length;
+let teamName = "";
+let progress = { solved: 0, startedAt: null, finishedAt: null };
+let timerInterval = null;
+let currentLevelIndex = null;
+
+const el = (id) => document.getElementById(id);
+
+function storageKey(name){ return "vaulthunt::" + name.trim().toLowerCase(); }
+
+function loadProgress(name){
+  try{
+    const raw = localStorage.getItem(storageKey(name));
+    if(raw){
+      const parsed = JSON.parse(raw);
+      progress = Object.assign({ solved: 0, startedAt: null, finishedAt: null }, parsed);
+    } else {
+      progress = { solved: 0, startedAt: Date.now(), finishedAt: null };
+      saveProgress();
+    }
+  } catch(e){
+    progress = { solved: 0, startedAt: Date.now(), finishedAt: null };
+  }
+}
+
+function saveProgress(){
+  if(!teamName) return;
+  localStorage.setItem(storageKey(teamName), JSON.stringify(progress));
+}
+
+async function sha256(message){
+  const data = new TextEncoder().encode(message.trim().toLowerCase());
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function formatTime(ms){
+  const totalSec = Math.floor(ms/1000);
+  const h = String(Math.floor(totalSec/3600)).padStart(2,'0');
+  const m = String(Math.floor((totalSec%3600)/60)).padStart(2,'0');
+  const s = String(totalSec%60).padStart(2,'0');
+  return `${h}:${m}:${s}`;
+}
+
+function tick(){
+  if(!progress.startedAt) return;
+  const end = progress.finishedAt || Date.now();
+  el('timerDisplay').textContent = formatTime(end - progress.startedAt);
+}
+
+function renderGrid(){
+  const grid = el('grid');
+  grid.innerHTML = '';
+  for(let i = 0; i < LEVELS; i++){
+    const dial = document.createElement('div');
+    let state = 'locked';
+    if(i < progress.solved) state = 'solved';
+    else if(i === progress.solved) state = 'active';
+
+    dial.className = `dial ${state}`;
+    dial.dataset.index = i;
+    dial.innerHTML = `
+      <span class="num">${String(i+1).padStart(2,'0')}</span>
+      ${state === 'solved' ? '<span class="check-icon">✓ cracked</span>' : ''}
+      ${state === 'locked' ? '<span class="lock-icon">locked</span>' : ''}
+    `;
+    if(state !== 'locked'){
+      dial.addEventListener('click', () => openLevel(i));
+    }
+    grid.appendChild(dial);
+  }
+  el('progressCount').textContent = `${progress.solved} / ${LEVELS}`;
+  el('progressFill').style.width = `${(progress.solved/LEVELS)*100}%`;
+
+  if(progress.solved >= LEVELS){
+    el('clearedPanel').style.display = 'block';
+    el('finalTime').textContent = `Total time: ${formatTime((progress.finishedAt||Date.now()) - progress.startedAt)}`;
+  } else {
+    el('clearedPanel').style.display = 'none';
+  }
+}
+
+function openLevel(i){
+  currentLevelIndex = i;
+  const lvl = CONFIG[i];
+  el('modalEyebrow').textContent = `Chamber ${String(i+1).padStart(2,'0')} of ${LEVELS}`;
+  el('modalTitle').textContent = lvl.title;
+  el('puzzleLink').href = lvl.link;
+  el('answerInput').value = '';
+  el('feedback').textContent = '';
+  el('feedback').className = 'feedback';
+  el('overlay').style.display = 'flex';
+  setTimeout(() => el('answerInput').focus(), 50);
+}
+
+function closeModal(){
+  el('overlay').style.display = 'none';
+  currentLevelIndex = null;
+}
+
+async function submitAnswer(){
+  if(currentLevelIndex === null) return;
+  const val = el('answerInput').value;
+  if(!val.trim()){
+    el('feedback').textContent = 'Type an answer first.';
+    el('feedback').className = 'feedback err';
+    return;
+  }
+  const hash = await sha256(val);
+  const lvl = CONFIG[currentLevelIndex];
+
+  if(hash === lvl.answerHash){
+    el('feedback').textContent = 'Correct — chamber cracked.';
+    el('feedback').className = 'feedback ok';
+    if(currentLevelIndex === progress.solved){
+      progress.solved += 1;
+      if(progress.solved >= LEVELS) progress.finishedAt = Date.now();
+      saveProgress();
+    }
+    setTimeout(() => { closeModal(); renderGrid(); }, 700);
+  } else {
+    el('feedback').textContent = 'Not quite. Try again.';
+    el('feedback').className = 'feedback err';
+    const dialEls = document.querySelectorAll('.dial');
+    if(dialEls[currentLevelIndex]){
+      dialEls[currentLevelIndex].classList.add('shake');
+      setTimeout(() => dialEls[currentLevelIndex].classList.remove('shake'), 400);
+    }
+  }
+}
+
+function startTeam(){
+  const name = el('teamName').value.trim();
+  if(!name){
+    el('teamName').focus();
+    return;
+  }
+  teamName = name;
+  loadProgress(teamName);
+  el('startBtn').textContent = 'Switch team';
+  if(timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(tick, 1000);
+  tick();
+  renderGrid();
+}
+
+el('startBtn').addEventListener('click', startTeam);
+el('teamName').addEventListener('keydown', (e) => { if(e.key === 'Enter') startTeam(); });
+el('closeModal').addEventListener('click', closeModal);
+el('cancelBtn').addEventListener('click', closeModal);
+el('submitBtn').addEventListener('click', submitAnswer);
+el('answerInput').addEventListener('keydown', (e) => { if(e.key === 'Enter') submitAnswer(); });
+el('overlay').addEventListener('click', (e) => { if(e.target.id === 'overlay') closeModal(); });
+
+/* ---------------------------------------------------------------------
+   Admin hash-generator panel — only shown with ?admin=1 in the URL, so
+   participants never see it.
+--------------------------------------------------------------------------*/
+if(new URLSearchParams(window.location.search).get('admin') === '1'){
+  el('adminPanel').style.display = 'block';
+  el('adminHashBtn').addEventListener('click', async () => {
+    const v = el('adminInput').value;
+    if(!v.trim()){ el('adminOut').textContent = 'Type something first.'; return; }
+    const h = await sha256(v);
+    el('adminOut').textContent = h;
+  });
+}
+
+/* Initial empty-grid render before a team name is entered */
+renderGrid();
+</script>
+
+</body>
+</html>
